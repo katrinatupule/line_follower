@@ -206,16 +206,13 @@ Call all functions needed for following line
 */
 void LineFollower::follow_line() {
     Serial.println("run control loop\n");
-    for (uint8_t i=0; i<5; i++) {
-        Serial.println("it" + String(i));
-        read_sensor_data();
-        calculate_steer();
-        calculate_throttle();
-        control_motors();
-        // motor_control_speed();
-        // motor_control_steer();
+    read_sensor_data();
+    calculate_steer();
+    calculate_throttle();
+    control_motors();
+    // motor_control_speed();
+    // motor_control_steer();
 
-        new_input = false;
-    }
+    new_input = false;
     
 }
