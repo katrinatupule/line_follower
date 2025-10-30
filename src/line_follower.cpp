@@ -5,7 +5,7 @@
 /*
 TODO:
 
- - build robot
+- build robot
     - select motors
         - test existing motors; identify shortcommings
         - test motor control
@@ -82,6 +82,11 @@ Update new_input flag
 */
 void LineFollower::read_sensor_data() {
     Serial.println("read sensor data");
+    for (int i=0; i<sensor_input_count; i++) {
+        last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
+    }
+
+    new_input = true;
 
 }
 
