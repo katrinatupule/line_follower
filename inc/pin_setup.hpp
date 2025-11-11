@@ -1,17 +1,21 @@
 #include <Arduino.h>
 #ifndef PINS_SETUP_HPP
-    // input pins
-    #define I_IR0 1
-    #define I_IR1 2
-    #define I_IR2 3
-    #define I_IR3 4
+    // input pins for IR sensors
+    #define I_IR0 A0
+    #define I_IR1 A1
+    #define I_IR2 A2
     #define I_BLACK HIGH
     #define I_WHITE LOW
+    
+    // infrared receiver pin
+    #define IR_PIN 2
 
-    // output pins
-    #define O_THROTTLE 5
-    // #define O_THROTTLE_LEFT 5
-    // #define O_THROTTLE_RIGHT 6
-    #define O_STEER 7
+    // L298N pins
+    #define ENA 5
+    #define IN1 4
+    #define IN2 3
+    #define ENB 6
+    #define IN3 7
+    #define IN4 8
 
 #endif // PINS_SETUP_HPP

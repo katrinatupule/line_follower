@@ -1,13 +1,22 @@
 class LineFollower {
     private:
+
+    unsigned long now;
     float last_throttle; // {0.0; 1.0} forward, if needed {-1.-; 0.0} back
     float last_steer; // {-1.0; 1.0}: -1: left; 1: right
     bool new_input;
+    bool digital;
     int sensor_input_count;
-    uint8_t steer_pin_nr;
-    uint8_t *throttle_pin_nrs;
+    int motor_phase;
+    // uint8_t *throttle_pin_nrs;
     int *sensor_pin_nrs;
     float *last_sensor_input;
+
+    // Motor control functions
+    void forward();
+    void backward();
+    void left();
+    void right();
 
     /*
     Write to last_sensor_input
@@ -19,6 +28,8 @@ class LineFollower {
     Calculate next steer action based on current sensor readings
     */
     void calculate_steer();
+    void calculate_steer3();
+    void calculate_steer5();
     
     /*
     Calculate next torque action based on current sensor readings
@@ -41,10 +52,13 @@ class LineFollower {
     void control_motors();
   
     public:
+    unsigned long timer;
     LineFollower();
     void calibrate_sensor();
     /*
     Call all functions needed for following line
     */
     void follow_line();
+    void stopMotors();
+    void test_motors();
 };

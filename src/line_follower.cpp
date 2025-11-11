@@ -53,22 +53,98 @@ TODO:
 */
 
 LineFollower::LineFollower() {
+    now = millis();
+    motor_phase = 0;
     last_throttle = 0.0;
     last_steer = 0.0;
     new_input = false;
-    sensor_input_count = 2;
-    sensor_pin_nrs = new int[sensor_input_count] {I_IR0, I_IR1};
-    last_sensor_input = new float[sensor_input_count] {0.0, 0.0};
+    digital = false;
+    sensor_input_count = 3;
+    sensor_pin_nrs = new int[sensor_input_count] {I_IR2, I_IR1, I_IR0}; // left to right
+    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0};
 
     for (int i=0; i<sensor_input_count; i++) {
         pinMode(sensor_pin_nrs[i], INPUT);
     }
 
-    steer_pin_nr = O_STEER;
-    pinMode(steer_pin_nr, OUTPUT);
-    throttle_pin_nrs = new uint8_t[1] {O_THROTTLE};
-    for (int i=0; i<1; i++)
-        pinMode(throttle_pin_nrs[i], OUTPUT);
+    // left motor
+    pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+    // right motor
+    pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+}
+
+void LineFollower::forward() {
+    // left
+    Serial.println("forward left");
+    digitalWrite(IN1, HIGH); 
+    digitalWrite(IN2, LOW); 
+    analogWrite(ENA, 200);
+
+    // right
+    Serial.println("forward right");
+    digitalWrite(IN3, HIGH); 
+    digitalWrite(IN4, LOW); 
+    analogWrite(ENB, 200);
+}
+
+void LineFollower::backward() {
+    // left
+    Serial.println("backward left");
+    digitalWrite(IN1, LOW); 
+    digitalWrite(IN2, HIGH); 
+    analogWrite(ENA, 200);
+    
+    // right
+    Serial.println("backward right");
+    digitalWrite(IN3, LOW); 
+    digitalWrite(IN4, HIGH); 
+    analogWrite(ENB, 200);
+}
+
+void LineFollower::left() {
+
+    // left motor
+    digitalWrite(IN1, LOW); 
+    digitalWrite(IN2, HIGH); 
+    analogWrite(ENA, 200);
+    
+    // right motor
+    digitalWrite(IN3, HIGH); 
+    digitalWrite(IN4, LOW); 
+    analogWrite(ENB, 200);
+}
+
+void LineFollower::right() {
+    // left motor
+    digitalWrite(IN1, HIGH); 
+    digitalWrite(IN2, LOW); 
+    analogWrite(ENA, 200);
+    
+    // right motor
+    digitalWrite(IN3, LOW); 
+    digitalWrite(IN4, HIGH); 
+    analogWrite(ENB, 200);
+}
+
+
+void LineFollower::stopMotors() {
+  digitalWrite(IN1, LOW); 
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW); 
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 0); 
+  analogWrite(ENB, 0);
+}
+
+void LineFollower::test_motors() {
+    now = millis();
+
+    switch (motor_phase) {
+        case 0: forward(); if (now - timer > 2000) { motor_phase = 1; timer = now; } break;
+        case 1: stopMotors(); if (now - timer > 1000) { motor_phase = 2; timer = now; } break;
+        case 2: backward(); if (now - timer > 2000) { motor_phase = 3; timer = now; } break;
+        case 3: stopMotors(); if (now - timer > 1000) { motor_phase = 0; timer = now; } break;
+    }
 }
 
 
@@ -83,7 +159,19 @@ Update new_input flag
 void LineFollower::read_sensor_data() {
     Serial.println("read sensor data");
     for (int i=0; i<sensor_input_count; i++) {
-        last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
+        if (digital){
+            last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
+        } else {
+            float val = analogRead(sensor_pin_nrs[i]);
+            if (val > 500) {
+                last_sensor_input[i] = I_WHITE;
+            } else {
+                last_sensor_input[i] = I_BLACK;
+
+            }
+        }
+        Serial.println(i);
+        Serial.println(last_sensor_input[i]);
     }
 
     new_input = true;
@@ -116,7 +204,50 @@ void LineFollower::calculate_steer() {
             last_steer = 0.0;
         }
     }
+}
+/*
+Calculate steer from 3 IR sensor inputs
+*/
+void LineFollower::calculate_steer3() {
+    Serial.println("calculate steer");
+    if (!new_input) {
+        return;
+    }
 
+    if (last_sensor_input[1] == I_BLACK) {
+        if (last_sensor_input[0] == I_WHITE) {
+            if (last_sensor_input[2] == I_WHITE) {
+                last_steer = 0.0;
+                return;
+            } else {
+                // both center and right sensor on black, slight turn right
+                last_steer = 0.5;
+                return;
+            }
+        } else {
+            if (last_sensor_input[2] == I_WHITE) {
+                // both center and left sensor on black, slight turn left
+                last_steer = -0.5;
+                return;
+            } else {
+                // at cross-road -> go straight
+                last_steer = 0.0;
+                return;
+            }
+        }
+    } else {
+        if (last_sensor_input[0] == I_BLACK) {
+            // left senor on black -> steer right
+            last_steer = 1.0;
+            return;
+        }
+        if (last_sensor_input[2] == I_BLACK) {
+            // right senor on black -> steer left
+            last_steer = -1.0;
+            return;
+        }
+        Serial.println("off-course: all white");
+    }
 
 }
 
@@ -142,7 +273,9 @@ void LineFollower::control_motors() {
         // go forward
         last_throttle = 1.0;
         Serial.println("same speed; go straight");
+        forward();
     } else {
+        stopMotors();
         // turn -> slow down
         last_throttle = 0.5;
         Serial.println("slow down");
@@ -150,11 +283,11 @@ void LineFollower::control_motors() {
         if (last_steer > 0.0) {
             // turn right
             Serial.println("turn right");
-            // TODO: throttle = 1 to right motor, <=0.5 to left motor
+            right();
         } else {
             // turn left
             Serial.println("turn left");
-            // TODO: throttle = 1 to left motor, <=0.5 to right motor
+            left();
         }
     }
 }
@@ -177,9 +310,6 @@ void LineFollower::motor_control_speed() {
         last_throttle = 0.5;
         Serial.println("slow down");
     }
-
-    // TODO: send last_throttle to motor driver
-
 }
 
 /*
@@ -212,11 +342,9 @@ Call all functions needed for following line
 void LineFollower::follow_line() {
     Serial.println("run control loop\n");
     read_sensor_data();
-    calculate_steer();
+    calculate_steer3();
     calculate_throttle();
     control_motors();
-    // motor_control_speed();
-    // motor_control_steer();
 
     new_input = false;
     
