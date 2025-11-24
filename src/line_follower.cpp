@@ -55,6 +55,10 @@ TODO:
 LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
+    
+    slow_speed_right = 100;
+    slow_speed_left = 95;
+    
     last_throttle = 0.0;
     last_steer = 0.0;
     new_input = false;
@@ -78,13 +82,13 @@ void LineFollower::forward() {
     Serial.println("forward left");
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, 200);
+    analogWrite(ENA, slow_speed_right);
 
     // right
     Serial.println("forward right");
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, 200);
+    analogWrite(ENB, slow_speed_left);
 }
 
 void LineFollower::backward() {
@@ -92,38 +96,37 @@ void LineFollower::backward() {
     Serial.println("backward left");
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, 200);
+    analogWrite(ENA, slow_speed_right);
     
     // right
     Serial.println("backward right");
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH); 
-    analogWrite(ENB, 200);
+    analogWrite(ENB, slow_speed_left);
 }
 
 void LineFollower::left() {
-
     // left motor
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, 200);
+    analogWrite(ENA, slow_speed_right);
     
     // right motor
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, 200);
+    analogWrite(ENB, slow_speed_left);
 }
 
 void LineFollower::right() {
     // left motor
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, 200);
+    analogWrite(ENA, slow_speed_right);
     
     // right motor
     digitalWrite(IN3, LOW); 
-    digitalWrite(IN4, HIGH); 
-    analogWrite(ENB, 200);
+    digitalWrite(IN4, HIGH);
+    analogWrite(ENB, slow_speed_left);
 }
 
 
@@ -343,8 +346,11 @@ void LineFollower::follow_line() {
     Serial.println("run control loop\n");
     read_sensor_data();
     calculate_steer3();
-    calculate_throttle();
+    // calculate_throttle();
     control_motors();
+    // delay(5);
+    // stopMotors();
+    // delay(50);
 
     new_input = false;
     

@@ -8,6 +8,10 @@ class LineFollower {
     bool digital;
     int sensor_input_count;
     int motor_phase;
+    
+    int slow_speed_right;
+    int slow_speed_left;
+    
     // uint8_t *throttle_pin_nrs;
     int *sensor_pin_nrs;
     float *last_sensor_input;
