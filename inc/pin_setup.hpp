@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #ifndef PINS_SETUP_HPP
     // input pins for IR sensors
-    #define I_IR0 A0
-    #define I_IR1 A1
-    #define I_IR2 A2
+    #define I_IR0 A4
+    #define I_IR1 A5
+    #define I_IR2 A6
+    #define I_IR3 A0
+    #define I_IR4 A1
+
     #define I_BLACK HIGH
     #define I_WHITE LOW
     

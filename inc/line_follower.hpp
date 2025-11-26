@@ -6,6 +6,9 @@ class LineFollower {
     float last_steer; // {-1.0; 1.0}: -1: left; 1: right
     bool new_input;
     bool digital;
+
+    bool off_course;
+
     int sensor_input_count;
     int motor_phase;
     
@@ -31,7 +34,7 @@ class LineFollower {
     /*
     Calculate next steer action based on current sensor readings
     */
-    void calculate_steer();
+    void calculate_steer2(int id_left, int id_right);
     void calculate_steer3();
     void calculate_steer5();
     
