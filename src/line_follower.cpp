@@ -65,10 +65,21 @@ LineFollower::LineFollower() {
     digital = false;
 
     off_course = false;
+    invert_steer = true; // set to true if turns are mirrored
 
-    sensor_input_count = 3;
-    sensor_pin_nrs = new int[sensor_input_count] {I_IR0, I_IR1, I_IR2}; // left to right
-    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0};
+    // 5 sensors: LEFT to RIGHT
+    // I_IR4(A1)=left, I_IR3(A0)=little left, I_IR2(A6)=middle, I_IR1(A5)=little right, I_IR0(A4)=right
+    sensor_input_count = 5;
+    sensor_pin_nrs = new int[sensor_input_count] {I_IR4, I_IR3, I_IR2, I_IR1, I_IR0};
+    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    // allocate adaptive min/max arrays for each sensor
+    sensor_min = new int[sensor_input_count];
+    sensor_max = new int[sensor_input_count];
+    for (int i=0; i<sensor_input_count; i++) {
+        sensor_min[i] = 1023; // large initial min
+        sensor_max[i] = 0;    // small initial max
+    }
 
     for (int i=0; i<sensor_input_count; i++) {
         pinMode(sensor_pin_nrs[i], INPUT);
@@ -84,48 +95,48 @@ void LineFollower::forward() {
     // left
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, slow_speed_left);
 
     // right
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, slow_speed_right);
 }
 
 void LineFollower::backward() {
     // left
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, slow_speed_left);
     
     // right
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, slow_speed_right);
 }
 
 void LineFollower::left() {
     // left motor
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, slow_speed_left);
     
     // right motor
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, slow_speed_right);
 }
 
 void LineFollower::right() {
     // left motor
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, slow_speed_left);
     
     // right motor
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH);
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, slow_speed_right);
 }
 
 
@@ -164,16 +175,24 @@ void LineFollower::read_sensor_data() {
         if (digital){
             last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
         } else {
-            float black_th = 30.0;
+            // Diagnostic-friendly analog read
+            // ADJUST black_th to match your sensor calibration
             float val = analogRead(sensor_pin_nrs[i]);
-            if (i == 0) {
-                Serial.println(val);
-            }
-            if (val < black_th) {
-                last_sensor_input[i] = I_WHITE;
-            } else {
-                last_sensor_input[i] = I_BLACK;
+            // update adaptive min/max
+            int v = (int)val;
+            if (v < sensor_min[i]) sensor_min[i] = v;
+            if (v > sensor_max[i]) sensor_max[i] = v;
+            int thresh = (sensor_min[i] + sensor_max[i]) / 2;
 
+            // Print raw values and current threshold for debugging
+            Serial.print("S"); Serial.print(i); Serial.print(": "); Serial.print(v);
+            Serial.print(" th="); Serial.print(thresh);
+            if (v > thresh) {
+                last_sensor_input[i] = I_BLACK;
+                Serial.println(" -> BLACK");
+            } else {
+                last_sensor_input[i] = I_WHITE;
+                Serial.println(" -> WHITE");
             }
         }
 
@@ -258,17 +277,57 @@ void LineFollower::calculate_steer3() {
 
 }
 
+/*
+Calculate steer from 5 IR sensor inputs
+Sensor indices: 0=LEFT, 1=little left, 2=MIDDLE, 3=little right, 4=RIGHT
+*/
 void LineFollower::calculate_steer5() {
-    Serial.println("calculate steer");
     if (!new_input) {
         return;
     }
-    calculate_steer3();
 
-    if (off_course) {
-        calculate_steer2(3, 4);
-        off_course = false;
+    // Check middle sensor first
+    if (last_sensor_input[2] == I_BLACK) {
+        // Middle on line - check if we need slight correction
+        if (last_sensor_input[1] == I_BLACK && last_sensor_input[3] == I_WHITE) {
+            // Middle + little left on black -> slight turn left
+            last_steer = -0.5;
+        } else if (last_sensor_input[3] == I_BLACK && last_sensor_input[1] == I_WHITE) {
+            // Middle + little right on black -> slight turn right
+            last_steer = 0.5;
+        } else {
+            // Centered or crossroad -> go straight
+            last_steer = 0.0;
+        }
+        return;
     }
+    
+    // Middle is WHITE - check inner sensors (little left/right)
+    if (last_sensor_input[1] == I_BLACK) {
+        // Little left sees line -> turn left
+        last_steer = -1.0;
+        return;
+    }
+    if (last_sensor_input[3] == I_BLACK) {
+        // Little right sees line -> turn right
+        last_steer = 1.0;
+        return;
+    }
+    
+    // Inner sensors all WHITE - check outer sensors (hard turn needed)
+    if (last_sensor_input[0] == I_BLACK) {
+        // Far LEFT sees line -> hard turn left
+        last_steer = -2.0;
+        return;
+    }
+    if (last_sensor_input[4] == I_BLACK) {
+        // Far RIGHT sees line -> hard turn right
+        last_steer = 2.0;
+        return;
+    }
+    
+    // All sensors WHITE - off course, keep last direction
+    off_course = true;
 }
 
 /*
@@ -287,27 +346,48 @@ void LineFollower::control_motors() {
         return;
     }
 
-    // TODO: send last_throttle to motor driver
-    if (last_steer == 0.0) {
-        // go forward
-        last_throttle = 1.0;
-        Serial.println("same speed; go straight");
+    // DEBUG: print chosen steer value
+    Serial.print("last_steer: "); Serial.println(last_steer);
+
+    // Apply invert flag (useful if sensors/motors are mirrored)
+    float eff_steer = invert_steer ? -last_steer : last_steer;
+    Serial.print("eff_steer: "); Serial.println(eff_steer);
+
+    if (eff_steer == 0.0) {
+        // Go straight
+        slow_speed_left = 60;
+        slow_speed_right = 60;
         forward();
-    } else {
-        stopMotors();
-        // turn -> slow down
-        last_throttle = 0.5;
-        // Serial.println("slow down");
-        
-        if (last_steer > 0.0) {
-            // turn right
-            Serial.println("turn right");
-            right();
-        } else {
-            // turn left
-            Serial.println("turn left");
-            left();
-        }
+    } else if (eff_steer == 0.5) {
+        // Slight right - slow down right wheel
+        slow_speed_left = 60;
+        slow_speed_right = 40;
+        forward();
+    } else if (eff_steer == -0.5) {
+        // Slight left - slow down left wheel
+        slow_speed_left = 40;
+        slow_speed_right = 60;
+        forward();
+    } else if (eff_steer == 1.0) {
+        // Turn right
+        slow_speed_left = 55;
+        slow_speed_right = 55;
+        right();
+    } else if (eff_steer == -1.0) {
+        // Turn left
+        slow_speed_left = 55;
+        slow_speed_right = 55;
+        left();
+    } else if (eff_steer >= 2.0) {
+        // HARD turn right (outer sensor)
+        slow_speed_left = 65;
+        slow_speed_right = 65;
+        right();
+    } else if (last_steer <= -2.0) {
+        // HARD turn left (outer sensor)
+        slow_speed_left = 65;
+        slow_speed_right = 65;
+        left();
     }
 }
 
@@ -357,18 +437,12 @@ Call all functions needed for following line
 */
 void LineFollower::follow_line() {
     read_sensor_data();
-    calculate_steer3();
-    // calculate_throttle();
+    calculate_steer5();
     control_motors();
-    // delay(5);
-    // stopMotors();
-    // delay(5);
-
-    if (slow_speed_left < 100) {
-        slow_speed_left++;
-        slow_speed_right++;
-    }
 
     new_input = false;
     
+    // LOOP DELAY - controls how often sensors are checked
+    // Increase this if robot overshoots turns (try 20, 30, 50)
+    delay(15);
 }

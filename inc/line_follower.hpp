@@ -8,6 +8,7 @@ class LineFollower {
     bool digital;
 
     bool off_course;
+    bool invert_steer;
 
     int sensor_input_count;
     int motor_phase;
@@ -18,6 +19,8 @@ class LineFollower {
     // uint8_t *throttle_pin_nrs;
     int *sensor_pin_nrs;
     float *last_sensor_input;
+    int *sensor_min;
+    int *sensor_max;
 
     // Motor control functions
     void forward();
