@@ -35,7 +35,7 @@ class LineFollower {
     Calculate next steer action based on current sensor readings
     */
     void calculate_steer2(int id_left, int id_right);
-    void calculate_steer3();
+    void calculate_steer3(int id_left, int id_center, int id_right);
     void calculate_steer5();
     
     /*

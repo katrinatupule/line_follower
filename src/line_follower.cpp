@@ -56,8 +56,8 @@ LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
     
-    slow_speed_right = 50;
-    slow_speed_left = 50;
+    slow_speed_right = 100;
+    slow_speed_left = 100;
     
     last_throttle = 0.0;
     last_steer = 0.0;
@@ -66,9 +66,9 @@ LineFollower::LineFollower() {
 
     off_course = false;
 
-    sensor_input_count = 3;
-    sensor_pin_nrs = new int[sensor_input_count] {I_IR0, I_IR1, I_IR2}; // left to right
-    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0};
+    sensor_input_count = 5;
+    sensor_pin_nrs = new int[sensor_input_count] {I_IR0, I_IR1, I_IR2, I_IR3, I_IR4}; // left to right
+    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0, 0.0, 0.0};
 
     for (int i=0; i<sensor_input_count; i++) {
         pinMode(sensor_pin_nrs[i], INPUT);
@@ -177,8 +177,8 @@ void LineFollower::read_sensor_data() {
             }
         }
 
-        // Serial.println(i);
-        // Serial.println(last_sensor_input[i]);
+        Serial.println(i);
+        Serial.println(last_sensor_input[i]);
     }
 
     new_input = true;
@@ -215,14 +215,14 @@ void LineFollower::calculate_steer2(int id_left, int id_right) {
 /*
 Calculate steer from 3 IR sensor inputs
 */
-void LineFollower::calculate_steer3() {
+void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
     if (!new_input) {
         return;
     }
 
-    if (last_sensor_input[1] == I_BLACK) {
-        if (last_sensor_input[0] == I_WHITE) {
-            if (last_sensor_input[2] == I_WHITE) {
+    if (last_sensor_input[id_center] == I_BLACK) {
+        if (last_sensor_input[id_left] == I_WHITE) {
+            if (last_sensor_input[id_right] == I_WHITE) {
                 last_steer = 0.0;
                 return;
             } else {
@@ -231,7 +231,7 @@ void LineFollower::calculate_steer3() {
                 return;
             }
         } else {
-            if (last_sensor_input[2] == I_WHITE) {
+            if (last_sensor_input[id_right] == I_WHITE) {
                 // both center and right sensor on white, slight turn left
                 last_steer = -1;
                 return;
@@ -242,12 +242,12 @@ void LineFollower::calculate_steer3() {
             }
         }
     } else {
-        if (last_sensor_input[0] == I_BLACK) {
+        if (last_sensor_input[id_left] == I_BLACK) {
             // left senor on black -> steer left
             last_steer = -0.5;
             return;
         }
-        if (last_sensor_input[2] == I_BLACK) {
+        if (last_sensor_input[id_right] == I_BLACK) {
             // right senor on black -> steer right
             last_steer = 0.5;
             return;
@@ -263,10 +263,10 @@ void LineFollower::calculate_steer5() {
     if (!new_input) {
         return;
     }
-    calculate_steer3();
+    calculate_steer3(1, 2, 3);
 
     if (off_course) {
-        calculate_steer2(3, 4);
+        calculate_steer2(0, 4);
         off_course = false;
     }
 }
@@ -357,17 +357,17 @@ Call all functions needed for following line
 */
 void LineFollower::follow_line() {
     read_sensor_data();
-    calculate_steer3();
+    calculate_steer5();
     // calculate_throttle();
     control_motors();
     // delay(5);
     // stopMotors();
     // delay(5);
 
-    if (slow_speed_left < 100) {
-        slow_speed_left++;
-        slow_speed_right++;
-    }
+    // if (slow_speed_left < 100) {
+    //     slow_speed_left++;
+    //     slow_speed_right++;
+    // }
 
     new_input = false;
     
