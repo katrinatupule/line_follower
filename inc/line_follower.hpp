@@ -9,6 +9,7 @@ class LineFollower {
 
     bool off_course;
     bool invert_steer;
+    bool invert_motors;
 
     int sensor_input_count;
     int motor_phase;
@@ -71,4 +72,8 @@ class LineFollower {
     void follow_line();
     void stopMotors();
     void test_motors();
+    // Runtime control
+    void toggleInvertSteer();
+    void toggleInvertMotors();
+    void printStatus();
 };

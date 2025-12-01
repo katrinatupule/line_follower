@@ -65,19 +65,25 @@ LineFollower::LineFollower() {
     digital = false;
 
     off_course = false;
-    invert_steer = true; // set to true if turns are mirrored
+    invert_steer = false; // set to true if turns are mirrored
+    invert_motors = false; // set to true if motor wiring makes right() physically turn left
 
     // 5 sensors: LEFT to RIGHT
-    // I_IR4(A1)=left, I_IR3(A0)=little left, I_IR2(A6)=middle, I_IR1(A5)=little right, I_IR0(A4)=right
+    // Index -> Physical sensor mapping:
+    // S0 (index 0) = I_IR4 (A1) = FAR LEFT → should turn LEFT
+    // S1 (index 1) = I_IR3 (A0) = LITTLE LEFT → should turn LEFT
+    // S2 (index 2) = I_IR2 (A6) = MIDDLE → go STRAIGHT
+    // S3 (index 3) = I_IR1 (A5) = LITTLE RIGHT → should turn RIGHT
+    // S4 (index 4) = I_IR0 (A4) = FAR RIGHT → should turn RIGHT
     sensor_input_count = 5;
-    sensor_pin_nrs = new int[sensor_input_count] {I_IR4, I_IR3, I_IR2, I_IR1, I_IR0};
+    sensor_pin_nrs = new int[sensor_input_count] {I_IR0, I_IR1, I_IR2,  I_IR3, I_IR4};
     last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0, 0.0, 0.0};
 
     // allocate adaptive min/max arrays for each sensor
     sensor_min = new int[sensor_input_count];
     sensor_max = new int[sensor_input_count];
     for (int i=0; i<sensor_input_count; i++) {
-        sensor_min[i] = 1023; // large initial min
+        sensor_min[i] = 83; // large initial min
         sensor_max[i] = 0;    // small initial max
     }
 
@@ -165,6 +171,21 @@ void LineFollower::calibrate_sensor() {
     Serial.println("calibrate sensor");
 }
 
+void LineFollower::toggleInvertSteer() {
+    invert_steer = !invert_steer;
+    Serial.print("invert_steer = "); Serial.println(invert_steer ? "true" : "false");
+}
+
+void LineFollower::toggleInvertMotors() {
+    invert_motors = !invert_motors;
+    Serial.print("invert_motors = "); Serial.println(invert_motors ? "true" : "false");
+}
+
+void LineFollower::printStatus() {
+    Serial.print("Status: invert_steer="); Serial.print(invert_steer ? "1" : "0");
+    Serial.print(" invert_motors="); Serial.println(invert_motors ? "1" : "0");
+}
+
 /*
 Write to last_sensor_input
 Update new_input flag
@@ -187,12 +208,21 @@ void LineFollower::read_sensor_data() {
             // Print raw values and current threshold for debugging
             Serial.print("S"); Serial.print(i); Serial.print(": "); Serial.print(v);
             Serial.print(" th="); Serial.print(thresh);
+            
+            // Determine which side this sensor should turn to
+            const char* turn_dir;
+            if (i == 0) turn_dir = "FAR-LEFT";
+            else if (i == 1) turn_dir = "LEFT";
+            else if (i == 2) turn_dir = "STRAIGHT";
+            else if (i == 3) turn_dir = "RIGHT";
+            else turn_dir = "FAR-RIGHT";
+            
             if (v > thresh) {
                 last_sensor_input[i] = I_BLACK;
-                Serial.println(" -> BLACK");
+                Serial.print(" -> BLACK [turn "); Serial.print(turn_dir); Serial.println("]");
             } else {
                 last_sensor_input[i] = I_WHITE;
-                Serial.println(" -> WHITE");
+                Serial.print(" -> WHITE [turn "); Serial.print(turn_dir); Serial.println("]");
             }
         }
 
@@ -286,48 +316,30 @@ void LineFollower::calculate_steer5() {
         return;
     }
 
-    // Check middle sensor first
-    if (last_sensor_input[2] == I_BLACK) {
-        // Middle on line - check if we need slight correction
-        if (last_sensor_input[1] == I_BLACK && last_sensor_input[3] == I_WHITE) {
-            // Middle + little left on black -> slight turn left
-            last_steer = -0.5;
-        } else if (last_sensor_input[3] == I_BLACK && last_sensor_input[1] == I_WHITE) {
-            // Middle + little right on black -> slight turn right
-            last_steer = 0.5;
-        } else {
-            // Centered or crossroad -> go straight
-            last_steer = 0.0;
-        }
-        return;
+    // Weighted centroid method across 5 sensors
+    // Indices: 0 (left) ... 4 (right)
+    float sum = 0.0;
+    float weighted = 0.0;
+    for (int i = 0; i < sensor_input_count; ++i) {
+        float v = (last_sensor_input[i] == I_BLACK) ? 1.0f : 0.0f;
+        sum += v;
+        weighted += v * (float)i;
     }
-    
-    // Middle is WHITE - check inner sensors (little left/right)
-    if (last_sensor_input[1] == I_BLACK) {
-        // Little left sees line -> turn left
-        last_steer = -1.0;
-        return;
+
+    if (sum > 0.0f) {
+        float position = weighted / sum; // 0..4
+        float center = (sensor_input_count - 1) / 2.0f; // 2.0
+        float error = position - center; // negative means left, positive means right
+        // normalize to [-1, 1]
+        last_steer = error / center;
+        off_course = false;
+        Serial.print("pos="); Serial.print(position); Serial.print(" err="); Serial.println(last_steer);
+    } else {
+        // no sensor sees the line
+        off_course = true;
+        // keep previous last_steer or set to 0; we keep previous to allow recovery
+        Serial.println("off_course: no sensors active");
     }
-    if (last_sensor_input[3] == I_BLACK) {
-        // Little right sees line -> turn right
-        last_steer = 1.0;
-        return;
-    }
-    
-    // Inner sensors all WHITE - check outer sensors (hard turn needed)
-    if (last_sensor_input[0] == I_BLACK) {
-        // Far LEFT sees line -> hard turn left
-        last_steer = -2.0;
-        return;
-    }
-    if (last_sensor_input[4] == I_BLACK) {
-        // Far RIGHT sees line -> hard turn right
-        last_steer = 2.0;
-        return;
-    }
-    
-    // All sensors WHITE - off course, keep last direction
-    off_course = true;
 }
 
 /*
@@ -372,22 +384,22 @@ void LineFollower::control_motors() {
         // Turn right
         slow_speed_left = 55;
         slow_speed_right = 55;
-        right();
+        if (invert_motors) left(); else right();
     } else if (eff_steer == -1.0) {
         // Turn left
         slow_speed_left = 55;
         slow_speed_right = 55;
-        left();
+        if (invert_motors) right(); else left();
     } else if (eff_steer >= 2.0) {
         // HARD turn right (outer sensor)
         slow_speed_left = 65;
         slow_speed_right = 65;
-        right();
+        if (invert_motors) left(); else right();
     } else if (last_steer <= -2.0) {
         // HARD turn left (outer sensor)
         slow_speed_left = 65;
         slow_speed_right = 65;
-        left();
+        if (invert_motors) right(); else left();
     }
 }
 

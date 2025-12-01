@@ -42,4 +42,16 @@ void loop() {
     if (running) {
         line_flwr.follow_line();
     }
+
+    // Serial runtime commands (non-blocking)
+    if (Serial.available()) {
+        char c = Serial.read();
+        if (c == 's') { // toggle steer inversion
+            line_flwr.toggleInvertSteer();
+        } else if (c == 'm') { // toggle motor inversion
+            line_flwr.toggleInvertMotors();
+        } else if (c == 'p') { // print status
+            line_flwr.printStatus();
+        }
+    }
 }
