@@ -56,8 +56,11 @@ LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
     
-    slow_speed_right = 100;
-    slow_speed_left = 100;
+    slow_speed_right = 80;
+    slow_speed_left = 80;
+
+    white_th = 0;
+    black_th = 800;
     
     last_throttle = 0.0;
     last_steer = 0.0;
@@ -113,14 +116,14 @@ void LineFollower::left() {
     // right motor
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, last_throttle*slow_speed_left);
 }
 
 void LineFollower::right() {
     // left motor
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, last_throttle*slow_speed_right);
     
     // right motor
     digitalWrite(IN3, LOW); 
@@ -151,7 +154,21 @@ void LineFollower::test_motors() {
 
 
 void LineFollower::calibrate_sensor() {
-    Serial.println("calibrate sensor");
+    white_th = 0;
+    black_th = 0;
+    for (int i=0; i<sensor_input_count; i++) {
+        float val = analogRead(sensor_pin_nrs[i]);
+        if (i != 2) {
+            white_th += 0.25 * val;
+        } else {
+            Serial.print("Sensor "); Serial.print(i); Serial.print(": "); Serial.println(val);
+            black_th = 800;;
+        }
+
+    }
+
+    Serial.print("Calibrated white th: "); Serial.println(white_th);
+    Serial.print("Calibrated black th: "); Serial.println(black_th);
 }
 
 /*
@@ -164,21 +181,19 @@ void LineFollower::read_sensor_data() {
         if (digital){
             last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
         } else {
-            float black_th = 30.0;
             float val = analogRead(sensor_pin_nrs[i]);
-            if (i == 0) {
-                Serial.println(val);
-            }
+            // if (i == 0) {
+                // Serial.println(val);
+            // }
             if (val < black_th) {
                 last_sensor_input[i] = I_WHITE;
             } else {
                 last_sensor_input[i] = I_BLACK;
-
             }
         }
 
-        Serial.println(i);
-        Serial.println(last_sensor_input[i]);
+        // Serial.println(i);
+        // Serial.println(last_sensor_input[i]);
     }
 
     new_input = true;
@@ -189,13 +204,18 @@ void LineFollower::read_sensor_data() {
 Calculate next steer action based on current sensor readings
 */
 void LineFollower::calculate_steer2(int id_left, int id_right) {
-    Serial.println("calculate steer");
+    // Serial.println("calculate steer");
     if (!new_input) {
         return;
     }
 
     if (last_sensor_input[id_left] == I_WHITE) {
         if (last_sensor_input[id_right] == I_WHITE) {
+            // if (off_course > 0) {
+            //     // both sensors on white -> was off-course, try to turn back
+            //     last_steer = 100;
+            //     return;
+            // }
             // both sensors on white -> go straight
             last_steer = 0.0;
         } else {
@@ -221,19 +241,20 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
     }
 
     if (last_sensor_input[id_center] == I_BLACK) {
+        off_course = 0;
         if (last_sensor_input[id_left] == I_WHITE) {
             if (last_sensor_input[id_right] == I_WHITE) {
                 last_steer = 0.0;
                 return;
             } else {
                 // both center and right sensor on black, slight turn right
-                last_steer = 1;
+                last_steer = 1.0;
                 return;
             }
         } else {
             if (last_sensor_input[id_right] == I_WHITE) {
                 // both center and right sensor on white, slight turn left
-                last_steer = -1;
+                last_steer = -1.0;
                 return;
             } else {
                 // at cross-road -> go straight
@@ -245,21 +266,23 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         if (last_sensor_input[id_left] == I_BLACK) {
             // left senor on black -> steer left
             last_steer = -0.5;
+            off_course = 0;
             return;
         }
         if (last_sensor_input[id_right] == I_BLACK) {
             // right senor on black -> steer right
             last_steer = 0.5;
+            off_course = 0;
             return;
         }
         // Serial.println("off-course: all white");
-        off_course = true;
+        off_course = 1;
     }
 
 }
 
 void LineFollower::calculate_steer5() {
-    Serial.println("calculate steer");
+    // Serial.println("calculate steer");
     if (!new_input) {
         return;
     }
@@ -267,7 +290,7 @@ void LineFollower::calculate_steer5() {
 
     if (off_course) {
         calculate_steer2(0, 4);
-        off_course = false;
+        off_course = 0;
     }
 }
 
@@ -275,8 +298,8 @@ void LineFollower::calculate_steer5() {
 Calculate next torque action based on current sensor readings
 */
 void LineFollower::calculate_throttle() {
-    Serial.println("calculate throttle");
-
+    // Serial.println("calculate throttle");
+    last_throttle = abs(last_steer);
 }
 
 /*
@@ -287,16 +310,24 @@ void LineFollower::control_motors() {
         return;
     }
 
+    last_throttle = 1.0;
     // TODO: send last_throttle to motor driver
     if (last_steer == 0.0) {
         // go forward
-        last_throttle = 1.0;
+        
         Serial.println("same speed; go straight");
         forward();
     } else {
         stopMotors();
+
+        // if (off_course > 10000) {
+        //     last_steer = 0;
+        //     backward();
+        //     return;
+        // }
+
         // turn -> slow down
-        last_throttle = 0.5;
+        // last_throttle = abs(last_steer);
         // Serial.println("slow down");
         
         if (last_steer > 0.0) {
@@ -323,11 +354,11 @@ void LineFollower::motor_control_speed() {
     if (last_steer == 0.0) {
         // go forward
         last_throttle = 1.0;
-        Serial.println("same speed");
+        // Serial.println("same speed");
     } else {
         // turn -> slow down
         last_throttle = 0.5;
-        Serial.println("slow down");
+        // Serial.println("slow down");
     }
 }
 

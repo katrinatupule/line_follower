@@ -7,8 +7,11 @@ class LineFollower {
     bool new_input;
     bool digital;
 
-    bool off_course;
+    int off_course;
 
+    float white_th;
+    float black_th;
+    
     int sensor_input_count;
     int motor_phase;
     
