@@ -27,6 +27,8 @@ class LineFollower {
     void backward();
     void left();
     void right();
+    void back_left();
+    void back_right();
 
     /*
     Write to last_sensor_input
