@@ -56,8 +56,10 @@ LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
     
-    slow_speed_right = 100;
-    slow_speed_left = 100;
+    slow_speed_right = 70;
+    slow_speed_left = 70;
+    fast_speed_right = 150;
+    fast_speed_left = 150;
 
     white_th = 0;
     black_th = 800;
@@ -87,24 +89,24 @@ void LineFollower::forward() {
     // left
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, fast_speed_right);
 
     // right
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, fast_speed_left);
 }
 
 void LineFollower::backward() {
     // left
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, fast_speed_right);
     
     // right
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH); 
-    analogWrite(ENB, slow_speed_left);
+    analogWrite(ENB, fast_speed_left);
 }
 
 void LineFollower::left() {
@@ -116,14 +118,14 @@ void LineFollower::left() {
     // right motor
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, slow_speed_right);
+    analogWrite(ENB, fast_speed_left-20);
 }
 
 void LineFollower::right() {
     // left motor
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, fast_speed_right-20);
     
     // right motor
     digitalWrite(IN3, LOW); 
@@ -274,6 +276,18 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         off_course = 0;
         if (last_sensor_input[id_left] == I_WHITE) {
             if (last_sensor_input[id_right] == I_WHITE) {
+                // continue turn after end of turn to straighten robot
+                // if (last_steer != 0) {
+                //     // cont_turn--;
+                //     if (last_steer > 0.15) {
+                //         last_steer -= 0.15;
+                //     } else if (last_steer < -0.15) {
+                //         last_steer += 0.15;
+                //     } else {
+                //         last_steer = 0.0;
+                //     }
+                //     return;
+                // }
                 last_steer = 0.0;
                 return;
             } else {
@@ -297,12 +311,12 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
     } else {
         if (last_sensor_input[id_left] == I_BLACK) {
             // left senor on black -> steer left
-            if (last_steer > -0.10) {
+            if (last_steer > -0.05) {
                 //start of left turn, set minimum steer
-                last_steer = -0.10;
+                last_steer = -0.05;
             } else if (last_steer > -1.0) {
                 // increase left steer
-                last_steer -= 0.05;
+                last_steer -= 0.15;
             }
             // else keep max left steer
             off_course = 0;
@@ -310,12 +324,12 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         }
         if (last_sensor_input[id_right] == I_BLACK) {
             // right senor on black -> steer right
-            if (last_steer < 0.10) {
+            if (last_steer < 0.05) {
                 //start of right turn, set minimum steer
-                last_steer = 0.10;
+                last_steer = 0.05;
             } else if (last_steer < 1.0) {
                 // increase right steer
-                last_steer += 0.05;
+                last_steer += 0.15;
             }
             // else keep max right steer
             off_course = 0;
@@ -374,12 +388,15 @@ void LineFollower::control_motors() {
 
     // TODO: send last_throttle to motor driver
     if (last_steer == 0.0) {
+        last_throttle = 1.0;
         // go forward
         
         Serial.println("same speed; go straight");
         forward();
     } else {
-        
+        if (last_throttle <= 0.05) {
+            stopMotors();
+        }
         if (last_steer > 0.0) {
             // turn right
             Serial.println("turn right");

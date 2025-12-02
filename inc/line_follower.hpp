@@ -14,9 +14,12 @@ class LineFollower {
     
     int sensor_input_count;
     int motor_phase;
-    
+
     int slow_speed_right;
     int slow_speed_left;
+
+    int fast_speed_right;
+    int fast_speed_left;
     
     // uint8_t *throttle_pin_nrs;
     int *sensor_pin_nrs;
