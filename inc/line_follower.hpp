@@ -24,6 +24,9 @@ class LineFollower {
     int speed_left;
     int speed_right;
 
+    int last_left_pwm;
+    int last_right_pwm;
+
     bool straighten;
 
     // uint8_t *throttle_pin_nrs;
@@ -84,4 +87,5 @@ class LineFollower {
     void follow_line();
     void stopMotors();
     void test_motors();
+    void reset_vals();
 };

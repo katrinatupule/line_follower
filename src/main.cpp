@@ -31,6 +31,7 @@ void loop() {
 
         if (key == 0x18) {  // Button "2"
             running = false;
+            line_flwr.reset_vals();
             line_flwr.stopMotors();
             Serial.println("STOP ALL");
         }
@@ -42,7 +43,4 @@ void loop() {
     if (running) {
         line_flwr.follow_line();
     }
-    // } else {
-    //     line_flwr.calibrate_sensor();
-    // }
 }

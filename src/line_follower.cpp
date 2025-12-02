@@ -56,13 +56,16 @@ LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
     
-    slow_speed_right = 70;
-    slow_speed_left = 70;
-    fast_speed_right = 150;
-    fast_speed_left = 150;
+    slow_speed_right = 100;
+    slow_speed_left = 100;
+    fast_speed_right = 170;
+    fast_speed_left = 170;
     
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
+    
+    last_right_pwm = slow_speed_left;
+    last_left_pwm = slow_speed_right;
 
     white_th = 0;
     black_th = 800;
@@ -89,6 +92,31 @@ LineFollower::LineFollower() {
     pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
     // right motor
     pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+}
+
+void LineFollower::reset_vals() {    
+    
+    speed_right = slow_speed_left;
+    speed_left = slow_speed_right;
+    
+    last_right_pwm = slow_speed_left;
+    last_left_pwm = slow_speed_right;
+
+    white_th = 0;
+    black_th = 800;
+    
+    last_throttle = 0.0;
+    last_steer = 0.0;
+
+    straighten = false;
+
+    new_input = false;
+    digital = false;
+
+    off_course = false;
+
+    sensor_input_count = 5;
+    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0, 0.0, 0.0}; 
 }
 
 void LineFollower::forward() {
@@ -167,7 +195,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
         speed_left = fast_speed_left - 20;
         speed_right = slow_speed_right;
         
-        right_cmd = 0.4 - last_steer;
+        right_cmd = 0.3 - last_steer;
     }
     
     if (last_steer < 0.0) {
@@ -175,7 +203,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
         speed_right = fast_speed_right - 20;
         speed_left = slow_speed_left;
         
-        left_cmd = 0.4 + last_steer;
+        left_cmd = 0.3 + last_steer;
     }
 }
 
@@ -209,8 +237,7 @@ void LineFollower::calibrate_sensor() {
         if (i != 2) {
             white_th += 0.25 * val;
         } else {
-            Serial.print("Sensor "); Serial.print(i); Serial.print(": "); Serial.println(val);
-            black_th = 800;;
+            black_th = val;
         }
     }
 
@@ -298,31 +325,33 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         if (last_sensor_input[id_left] == I_WHITE) {
             if (last_sensor_input[id_right] == I_WHITE) {
                 // continue turn after end of turn to straighten robot
-                // if (!straighten && abs(last_steer) > 0.2) {
-                //     straighten = true;
-                // }
+                if (!straighten && abs(last_steer) > 0.2) {
+                    straighten = true;
+                    return;
+                }
 
-                // if (straighten) {
-                //     last_steer *= 0.7;
-                //     if (abs(last_steer) < 0.05) {
-                //         last_steer = 0.0;
-                //         straighten = false;
-                //     }
-                //     return;
-                // }
+                if (straighten) {
+                    last_steer *= 0.8;
+                    if (abs(last_steer) < 0.05) {
+                        last_steer = 0.0;
+                        straighten = false;
+                    }
+                    return;
+                }
                 last_steer = 0.0;
                 return;
             } else {
                 // both center and right sensor on black -> turn right
                 // strong turn, sensors far apart -> can't be both on line if not a turn
-                last_steer = 1.0;
+                last_steer = (last_steer + 1.0) / 2;
                 return;
             }
         } else {
             if (last_sensor_input[id_right] == I_WHITE) {
                 // both center and right sensor on white -> turn left
                 // strong turn, sensors far apart -> can't be both on line if not a turn
-                last_steer = -1.0;
+                // last_steer = -1.0;
+                last_steer = (last_steer - 1.0) / 2;
                 return;
             } else {
                 // at cross-road -> go straight
@@ -335,10 +364,10 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
             // left senor on black -> steer left
             if (last_steer > -0.05) {
                 //start of left turn, set minimum steer
-                last_steer = -0.05;
+                last_steer = (last_steer - 0.05) / 2;
             } else if (last_steer > -1.0) {
                 // increase left steer
-                last_steer -= 0.15;
+                last_steer = (last_steer + last_steer - 0.15) / 2;
             }
             // else keep max left steer
             off_course = 0;
@@ -348,10 +377,10 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
             // right senor on black -> steer right
             if (last_steer < 0.05) {
                 //start of right turn, set minimum steer
-                last_steer = 0.05;
+                last_steer = (last_steer + 0.05) / 2;
             } else if (last_steer < 1.0) {
                 // increase right steer
-                last_steer += 0.15;
+                last_steer = (last_steer + last_steer + 0.15) / 2;
             }
             // else keep max right steer
             off_course = 0;
@@ -390,7 +419,7 @@ void LineFollower::control_motors() {
     last_throttle = abs(last_steer);
 
     // backtrack if off course for too long
-    if (off_course > 150) {
+    if (off_course > 125) {
         stopMotors();
         if (last_steer == 0.0) {
             backward();
