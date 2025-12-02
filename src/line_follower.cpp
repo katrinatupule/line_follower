@@ -211,18 +211,20 @@ void LineFollower::calculate_steer2(int id_left, int id_right) {
 
     if (last_sensor_input[id_left] == I_WHITE) {
         if (last_sensor_input[id_right] == I_WHITE) {
-            // if (off_course > 0) {
-            //     // both sensors on white -> was off-course, try to turn back
-            //     last_steer = 100;
-            //     return;
-            // }
+            if (off_course > 0) {
+                // both sensors on white -> was off-course, try to turn back
+                // last_steer = 100;
+                return;
+            }
             // both sensors on white -> go straight
             last_steer = 0.0;
         } else {
+            off_course = 0;
             // right sensor on black, left on white -> turn right
             last_steer = 1.0;
         }
     } else {
+        off_course = 0;
         if (last_sensor_input[id_right] == I_WHITE) {
             // right sensor on white, left on black -> turn left
             last_steer = -1.0;
@@ -265,18 +267,18 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
     } else {
         if (last_sensor_input[id_left] == I_BLACK) {
             // left senor on black -> steer left
-            last_steer = -0.5;
+            last_steer = -0.25;
             off_course = 0;
             return;
         }
         if (last_sensor_input[id_right] == I_BLACK) {
             // right senor on black -> steer right
-            last_steer = 0.5;
+            last_steer = 0.25;
             off_course = 0;
             return;
         }
         // Serial.println("off-course: all white");
-        off_course = 1;
+        off_course += 1;
     }
 
 }
@@ -290,7 +292,7 @@ void LineFollower::calculate_steer5() {
 
     if (off_course) {
         calculate_steer2(0, 4);
-        off_course = 0;
+        // off_course = 0;
     }
 }
 
@@ -311,6 +313,19 @@ void LineFollower::control_motors() {
     }
 
     last_throttle = 1.0;
+    if (off_course > 250) {
+        last_steer = 0;
+        stopMotors();
+        backward();
+
+        if (last_steer > 0.0) {
+            left();
+        } else if (last_steer < 0.0) {
+            right();
+        }
+        return;
+    }
+
     // TODO: send last_throttle to motor driver
     if (last_steer == 0.0) {
         // go forward
@@ -319,15 +334,8 @@ void LineFollower::control_motors() {
         forward();
     } else {
         stopMotors();
-
-        // if (off_course > 10000) {
-        //     last_steer = 0;
-        //     backward();
-        //     return;
-        // }
-
         // turn -> slow down
-        // last_throttle = abs(last_steer);
+        last_throttle = abs(last_steer);
         // Serial.println("slow down");
         
         if (last_steer > 0.0) {
@@ -394,11 +402,6 @@ void LineFollower::follow_line() {
     // delay(5);
     // stopMotors();
     // delay(5);
-
-    // if (slow_speed_left < 100) {
-    //     slow_speed_left++;
-    //     slow_speed_right++;
-    // }
 
     new_input = false;
     
