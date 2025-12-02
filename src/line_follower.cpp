@@ -60,12 +60,18 @@ LineFollower::LineFollower() {
     slow_speed_left = 70;
     fast_speed_right = 150;
     fast_speed_left = 150;
+    
+    speed_right = slow_speed_left;
+    speed_left = slow_speed_right;
 
     white_th = 0;
     black_th = 800;
     
     last_throttle = 0.0;
     last_steer = 0.0;
+
+    straighten = false;
+
     new_input = false;
     digital = false;
 
@@ -109,31 +115,6 @@ void LineFollower::backward() {
     analogWrite(ENB, fast_speed_left);
 }
 
-void LineFollower::left() {
-    // left motor
-    digitalWrite(IN1, LOW); 
-    digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, last_throttle * slow_speed_right);
-    
-    // right motor
-    digitalWrite(IN3, HIGH); 
-    digitalWrite(IN4, LOW); 
-    analogWrite(ENB, fast_speed_left-20);
-}
-
-void LineFollower::right() {
-    // left motor
-    digitalWrite(IN1, HIGH); 
-    digitalWrite(IN2, LOW); 
-    analogWrite(ENA, fast_speed_right-20);
-    
-    // right motor
-    digitalWrite(IN3, LOW); 
-    digitalWrite(IN4, HIGH);
-    analogWrite(ENB, last_throttle * slow_speed_left);
-}
-
-
 void LineFollower:: back_left() {
     // left motor
     digitalWrite(IN1, HIGH); 
@@ -156,6 +137,46 @@ void LineFollower::back_right() {
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW);
     analogWrite(ENB, last_throttle * slow_speed_left);
+}
+
+void LineFollower::drive_action(float left_cmd, float right_cmd) {
+    bool left_forward = (left_cmd > 0) ? true : false;
+    bool right_forward = (right_cmd > 0) ? true : false;
+
+    int left_pwm = abs(left_cmd) * speed_left;
+    int right_pwm = abs(right_cmd) * speed_right;
+
+    if (left_forward) { digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW); }
+    else             { digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH); }
+    analogWrite(ENA, left_pwm);
+
+    if (right_forward) { digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW); }
+    else              { digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH); }
+    analogWrite(ENB, right_pwm);
+}
+
+void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
+    if (last_steer == 0.0) {
+        left_cmd = 1.0;
+        right_cmd = 1.0;
+        return;
+    }
+
+    if (last_steer > 0.0) {
+        left_cmd = 1.0;
+        speed_left = fast_speed_left - 20;
+        speed_right = slow_speed_right;
+        
+        right_cmd = 0.4 - last_steer;
+    }
+    
+    if (last_steer < 0.0) {
+        right_cmd = 1.0;
+        speed_right = fast_speed_right - 20;
+        speed_left = slow_speed_left;
+        
+        left_cmd = 0.4 + last_steer;
+    }
 }
 
 
@@ -277,14 +298,15 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         if (last_sensor_input[id_left] == I_WHITE) {
             if (last_sensor_input[id_right] == I_WHITE) {
                 // continue turn after end of turn to straighten robot
-                // if (last_steer != 0) {
-                //     // cont_turn--;
-                //     if (last_steer > 0.15) {
-                //         last_steer -= 0.15;
-                //     } else if (last_steer < -0.15) {
-                //         last_steer += 0.15;
-                //     } else {
+                // if (!straighten && abs(last_steer) > 0.2) {
+                //     straighten = true;
+                // }
+
+                // if (straighten) {
+                //     last_steer *= 0.7;
+                //     if (abs(last_steer) < 0.05) {
                 //         last_steer = 0.0;
+                //         straighten = false;
                 //     }
                 //     return;
                 // }
@@ -346,20 +368,16 @@ void LineFollower::calculate_steer5() {
     if (!new_input) {
         return;
     }
+    if (is_crossroad()) {
+        last_steer = 0.0;
+        return;
+    }
     calculate_steer3(1, 2, 3);
 
     if (off_course) {
         calculate_steer2(0, 4);
     }
 }
-
-// /*
-// Calculate next torque action based on current sensor readings
-// */
-// void LineFollower::calculate_throttle() {
-//     // Serial.println("calculate throttle");
-//     last_throttle = abs(last_steer);
-// }
 
 /*
 send action to speed motors
@@ -372,7 +390,7 @@ void LineFollower::control_motors() {
     last_throttle = abs(last_steer);
 
     // backtrack if off course for too long
-    if (off_course > 175) {
+    if (off_course > 150) {
         stopMotors();
         if (last_steer == 0.0) {
             backward();
@@ -391,64 +409,54 @@ void LineFollower::control_motors() {
         last_throttle = 1.0;
         // go forward
         
-        Serial.println("same speed; go straight");
+        // Serial.println("same speed; go straight");
         forward();
     } else {
-        if (last_throttle <= 0.05) {
-            stopMotors();
-        }
-        if (last_steer > 0.0) {
-            // turn right
-            Serial.println("turn right");
-            right();
-        } else {
-            // turn left
-            Serial.println("turn left");
-            left();
-        }
+        float left_cmd = 0.0;
+        float right_cmd = 0.0;
+        calculate_motor_cmd(left_cmd, right_cmd);
+        drive_action(left_cmd, right_cmd);
     }
 }
 
-// /*
-// send action to speed motors
-// */
-// void LineFollower::motor_control_speed() {
-//     Serial.println("control speed");
-//     if (!new_input) {
-//         return;
-//     }
+bool LineFollower::is_crossroad() {
+    int black_det = 0;
+    for (int i = 0; i < sensor_input_count; i++) {
+        black_det += last_sensor_input[i];
+    }
 
-//     if (last_steer == 0.0) {
-//         // go forward
-//         last_throttle = 1.0;
-//         // Serial.println("same speed");
-//     } else {
-//         // turn -> slow down
-//         last_throttle = 0.5;
-//         // Serial.println("slow down");
-//     }
-// }
+    if (black_det >= 4) {
+        return true;
+    }
 
-// /*
-// send action to steer motors
-// */
-// void LineFollower::motor_control_steer() {
-//     Serial.println("control steer");
-//     if (!new_input) {
-//         return;
-//     }
+    black_det = 0;
+    black_det += last_sensor_input[1];
+    black_det += last_sensor_input[2];
+    black_det += last_sensor_input[3];
+    if (black_det == 3) {
+        return true;
+    }
 
-//     if (last_steer == 0.0) {
-//         // go straight
-//         Serial.println("go straight");
-//     } else if (last_steer > 0.0) {
-//         // turn right
-//         Serial.println("turn right");
-//     } else {
-//         // turn left
-//         Serial.println("turn left");
-//     }
-// }
+    if (last_steer > 0) {
+        black_det = 0;
+        black_det += last_sensor_input[0];
+        black_det += last_sensor_input[1];
+        black_det += last_sensor_input[2];
+        if (black_det == 3) {
+            return true;
+        }
+    } else if (last_steer < 0) {
+        black_det = 0;
+        black_det += last_sensor_input[2];
+        black_det += last_sensor_input[3];
+        black_det += last_sensor_input[4];
+        if (black_det == 3) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /*
 Call all functions needed for following line
