@@ -184,12 +184,7 @@ void LineFollower::drive_action(float left_cmd, float right_cmd) {
 }
 
 void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
-    if (last_steer == 0.0) {
-        left_cmd = 1.0;
-        right_cmd = 1.0;
-        return;
-    }
-
+    
     if (last_steer > 0.0) {
         left_cmd = 1.0;
         speed_left = fast_speed_left - 20;
@@ -250,7 +245,6 @@ Write to last_sensor_input
 Update new_input flag
 */
 void LineFollower::read_sensor_data() {
-    // Serial.println("read sensor data");
     for (int i=0; i<sensor_input_count; i++) {
         if (digital){
             last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
@@ -270,7 +264,6 @@ void LineFollower::read_sensor_data() {
 Calculate next steer action based on current sensor readings
 */
 void LineFollower::calculate_steer2(int id_left, int id_right) {
-    // Serial.println("calculate steer");
     if (!new_input) {
         return;
     }
@@ -393,7 +386,6 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
 }
 
 void LineFollower::calculate_steer5() {
-    // Serial.println("calculate steer");
     if (!new_input) {
         return;
     }
@@ -403,9 +395,7 @@ void LineFollower::calculate_steer5() {
     }
     calculate_steer3(1, 2, 3);
 
-    if (off_course) {
         calculate_steer2(0, 4);
-    }
 }
 
 /*
@@ -433,12 +423,9 @@ void LineFollower::control_motors() {
         return;
     }
 
-    // TODO: send last_throttle to motor driver
     if (last_steer == 0.0) {
         last_throttle = 1.0;
         // go forward
-        
-        // Serial.println("same speed; go straight");
         forward();
     } else {
         float left_cmd = 0.0;
@@ -493,11 +480,7 @@ Call all functions needed for following line
 void LineFollower::follow_line() {
     read_sensor_data();
     calculate_steer5();
-    // calculate_throttle();
     control_motors();
-    // delay(5);
-    // stopMotors();
-    // delay(5);
 
     new_input = false;
     
