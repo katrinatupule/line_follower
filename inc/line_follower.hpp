@@ -29,6 +29,11 @@ class LineFollower {
 
     bool straighten;
 
+    float Kp;
+    float Kd;
+    float last_error;
+
+
     // uint8_t *throttle_pin_nrs;
     int *sensor_pin_nrs;
     float *last_sensor_input;
@@ -53,6 +58,8 @@ class LineFollower {
     void calculate_steer2(int id_left, int id_right);
     void calculate_steer3(int id_left, int id_center, int id_right);
     void calculate_steer5();
+    void calculate_pid_steer();
+
     bool is_crossroad();
     void drive_action(float left_cmd, float right_cmd);
     void calculate_motor_cmd(float &left_cmd, float &right_cmd);

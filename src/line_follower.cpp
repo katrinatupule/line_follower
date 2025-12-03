@@ -64,14 +64,17 @@ LineFollower::LineFollower() {
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
     
-    last_right_pwm = slow_speed_left;
-    last_left_pwm = slow_speed_right;
+    last_right_pwm = 0;
+    last_left_pwm = 0;
 
     white_th = 0;
-    black_th = 800;
+    black_th = 500;
     
     last_throttle = 0.0;
     last_steer = 0.0;
+
+    Kp = 0.75;
+    Kd = 0.4;
 
     straighten = false;
 
@@ -99,8 +102,8 @@ void LineFollower::reset_vals() {
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
     
-    last_right_pwm = slow_speed_left;
-    last_left_pwm = slow_speed_right;
+    last_right_pwm = 0;
+    last_left_pwm = 0;
 
     white_th = 0;
     black_th = 800;
@@ -120,51 +123,63 @@ void LineFollower::reset_vals() {
 }
 
 void LineFollower::forward() {
+    last_left_pwm = (last_left_pwm + fast_speed_left) / 2;
+    last_right_pwm = (last_right_pwm + fast_speed_right) / 2;
     // left
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, fast_speed_right);
+    analogWrite(ENA, last_left_pwm);
 
     // right
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW); 
-    analogWrite(ENB, fast_speed_left);
+    analogWrite(ENB, last_right_pwm);
 }
 
 void LineFollower::backward() {
     // left
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, fast_speed_right);
+    analogWrite(ENA, last_left_pwm);
     
     // right
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH); 
-    analogWrite(ENB, fast_speed_left);
+    analogWrite(ENB, last_right_pwm);
+
+    last_left_pwm = -last_left_pwm;
+    last_right_pwm = -last_right_pwm;
 }
 
 void LineFollower:: back_left() {
+    // last_left_pwm = int((0.2*(float)last_left_pwm + 0.8*last_throttle * (float)slow_speed_right) / 2);
+    last_left_pwm = int(last_throttle * slow_speed_left);
     // left motor
     digitalWrite(IN1, HIGH); 
     digitalWrite(IN2, LOW); 
-    analogWrite(ENA, last_throttle * slow_speed_right);
+    analogWrite(ENA, last_left_pwm);
     
     // right motor
     digitalWrite(IN3, LOW); 
     digitalWrite(IN4, HIGH); 
     analogWrite(ENB, slow_speed_right);
+
+    last_right_pwm = -slow_speed_right;
 }
 
 void LineFollower::back_right() {
+    last_right_pwm = int(last_throttle * slow_speed_right);
     // left motor
     digitalWrite(IN1, LOW); 
     digitalWrite(IN2, HIGH); 
-    analogWrite(ENA, slow_speed_right);
+    analogWrite(ENA, slow_speed_left);
     
     // right motor
     digitalWrite(IN3, HIGH); 
     digitalWrite(IN4, LOW);
-    analogWrite(ENB, last_throttle * slow_speed_left);
+    analogWrite(ENB, last_throttle * slow_speed_right);
+
+    last_left_pwm = -slow_speed_left;
 }
 
 void LineFollower::drive_action(float left_cmd, float right_cmd) {
@@ -181,6 +196,8 @@ void LineFollower::drive_action(float left_cmd, float right_cmd) {
     if (right_forward) { digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW); }
     else              { digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH); }
     analogWrite(ENB, right_pwm);
+    last_left_pwm = (left_forward) ? left_pwm : -left_pwm;
+    last_right_pwm = (right_forward) ? right_pwm : -right_pwm;
 }
 
 void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
@@ -393,10 +410,69 @@ void LineFollower::calculate_steer5() {
         last_steer = 0.0;
         return;
     }
-    calculate_steer3(1, 2, 3);
 
-        calculate_steer2(0, 4);
+    calculate_pid_steer();
+    // calculate_steer3(1, 2, 3);
+
+    //     calculate_steer2(0, 4);
 }
+
+void LineFollower::calculate_pid_steer() {
+    if (!new_input) {
+        return;
+    }
+
+    float weighted_pos_sum = 0.0;
+    float active_sensors = 0.0;
+    float weights[5] = {-2.0, -1.0, 0.0, 1.0, 2.0};
+
+    for (int i = 0; i < sensor_input_count; i++) {
+        int black = (last_sensor_input[i] == I_BLACK) ? 1 : 0;
+
+        if (black) {
+            weighted_pos_sum += weights[i];
+            active_sensors++;
+        }
+    }
+
+    float curr_error = 0.0;
+    if (active_sensors) {
+        off_course = 0;
+        curr_error = weighted_pos_sum / active_sensors;
+
+        if (curr_error > 0) {
+            last_steer = 1.0;
+        } else if (curr_error < 0) {
+            last_steer = -1.0;
+        } else {
+            last_steer = 0.0;
+        }
+    } else {
+        off_course++;
+        // if (off_course > 20) {
+            if (last_steer > 0.0) {
+                curr_error = 2.5;
+            } else if (last_steer < 0.0) {
+                curr_error = -2.5;
+            } else {
+                curr_error = 0; // reconsider this
+            }
+        // }
+    }
+
+    float P = curr_error;
+    float D = curr_error - last_error;
+    last_error = curr_error;
+
+    float last_steer = Kp * P + Kd * D;
+
+    if (last_steer > 1.0) {
+        last_steer = 1.0;
+    } else if (last_steer < -1.0) {
+        last_steer = -1.0;
+    }
+}
+
 
 /*
 send action to speed motors
@@ -409,7 +485,7 @@ void LineFollower::control_motors() {
     last_throttle = abs(last_steer);
 
     // backtrack if off course for too long
-    if (off_course > 125) {
+    if (off_course > 100) {
         stopMotors();
         if (last_steer == 0.0) {
             backward();
