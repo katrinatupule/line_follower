@@ -56,10 +56,10 @@ LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
     
-    slow_speed_right = 100;
-    slow_speed_left = 100;
-    fast_speed_right = 170;
-    fast_speed_left = 170;
+    slow_speed_right = 130;
+    slow_speed_left = 130;
+    fast_speed_right = 190;
+    fast_speed_left = 190;
     
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
@@ -73,8 +73,8 @@ LineFollower::LineFollower() {
     last_throttle = 0.0;
     last_steer = 0.0;
 
-    Kp = 0.75;
-    Kd = 0.4;
+    Kp = 1.0;
+    Kd = 0.2;
 
     straighten = false;
 
@@ -207,7 +207,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
         speed_left = fast_speed_left - 20;
         speed_right = slow_speed_right;
         
-        right_cmd = 0.3 - last_steer;
+        right_cmd = 0.25 - last_steer;
     }
     
     if (last_steer < 0.0) {
@@ -215,7 +215,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
         speed_right = fast_speed_right - 20;
         speed_left = slow_speed_left;
         
-        left_cmd = 0.3 + last_steer;
+        left_cmd = 0.25 + last_steer;
     }
 }
 
@@ -424,7 +424,7 @@ void LineFollower::calculate_pid_steer() {
 
     float weighted_pos_sum = 0.0;
     float active_sensors = 0.0;
-    float weights[5] = {-2.0, -1.0, 0.0, 1.0, 2.0};
+    float weights[5] = {-1.5, -1.0, 0.0, 1.0, 1.5};
 
     for (int i = 0; i < sensor_input_count; i++) {
         int black = (last_sensor_input[i] == I_BLACK) ? 1 : 0;
@@ -451,9 +451,9 @@ void LineFollower::calculate_pid_steer() {
         off_course++;
         // if (off_course > 20) {
             if (last_steer > 0.0) {
-                curr_error = 2.5;
+                curr_error = -1.5;
             } else if (last_steer < 0.0) {
-                curr_error = -2.5;
+                curr_error = -1.5;
             } else {
                 curr_error = 0; // reconsider this
             }
@@ -485,7 +485,7 @@ void LineFollower::control_motors() {
     last_throttle = abs(last_steer);
 
     // backtrack if off course for too long
-    if (off_course > 100) {
+    if (off_course > 60) {
         stopMotors();
         if (last_steer == 0.0) {
             backward();
