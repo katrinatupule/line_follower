@@ -24,8 +24,13 @@ class LineFollower {
     int speed_left;
     int speed_right;
 
-    int last_left_pwm;
-    int last_right_pwm;
+    // [-1.0; 1.0]
+    float target_left;
+    float target_right;
+    float curr_left;
+    float curr_right;
+
+    float alpha ;
 
     bool straighten;
 
@@ -83,6 +88,9 @@ class LineFollower {
     send action to motors if no separate steer motor is used
     */
     void control_motors();
+
+    void update_motor_physics();
+    void apply_motor_action(int left_pwm, int right_pwm);
   
     public:
     unsigned long timer;
