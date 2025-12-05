@@ -1,0 +1,51 @@
+
+/*
+Work brakedown structure of the line follower project
+TODO:
+
+- build robot
+    - select motors
+        - test existing motors; identify shortcommings
+        - test motor control
+
+    - select motor driver
+        - test existing, if available
+    - select sensors
+        - test existing
+        - compare alternatives
+        - define vague solutions with each sensor; identify shortcommings and advantages
+        - implement sensor reading
+
+    - select microcontroller
+        - define requirements (pins, performance, voltage, current, power consumption, size, weight)
+        - compare alternatives
+    - select power supply
+        - define requirements (voltage, current, capacity, weight, size)
+        - compare alternatives
+    - design circuit
+    - order parts (if necessary)
+    - wire robot
+        - map pins
+    - build robot chassis
+        - design alternatives
+        - define advantages and shortcommings
+        - order/print parts
+        - build (and rebuild/adjust) chassis
+ - implement line following algorithm
+    - implement robot driving (forward, backward, stop)
+        - implement speed control (slow, fast, accelerate, decelerate) based on sensor input and steering
+        - PID speed control (if needed)
+    - implemet steering (left, right, straight)
+        - implement steering control based on sensor input
+        - test different steering strategies
+            - turn with one wheel active
+            - turn with both wheels active (different speeds, directions)
+            - turn with additional motor (if available, if needed)
+            - PID steering control (if needed)
+    - implement decision making based on sensor input
+        - test different sensor configurations (if possible)
+        - implement two sensor setup
+        - implement four sensor setup
+        - implement more complex sensor setup (if possible)
+
+*/

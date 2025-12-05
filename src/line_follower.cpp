@@ -2,83 +2,37 @@
 #include "line_follower.hpp"
 #include "pin_setup.hpp"
 
-/*
-TODO:
-
-- build robot
-    - select motors
-        - test existing motors; identify shortcommings
-        - test motor control
-
-    - select motor driver
-        - test existing, if available
-    - select sensors
-        - test existing
-        - compare alternatives
-        - define vague solutions with each sensor; identify shortcommings and advantages
-        - implement sensor reading
-
-    - select microcontroller
-        - define requirements (pins, performance, voltage, current, power consumption, size, weight)
-        - compare alternatives
-    - select power supply
-        - define requirements (voltage, current, capacity, weight, size)
-        - compare alternatives
-    - design circuit
-    - order parts (if necessary)
-    - wire robot
-        - map pins
-    - build robot chassis
-        - design alternatives
-        - define advantages and shortcommings
-        - order/print parts
-        - build (and rebuild/adjust) chassis
- - implement line following algorithm
-    - implement robot driving (forward, backward, stop)
-        - implement speed control (slow, fast, accelerate, decelerate) based on sensor input and steering
-        - PID speed control (if needed)
-    - implemet steering (left, right, straight)
-        - implement steering control based on sensor input
-        - test different steering strategies
-            - turn with one wheel active
-            - turn with both wheels active (different speeds, directions)
-            - turn with additional motor (if available, if needed)
-            - PID steering control (if needed)
-    - implement decision making based on sensor input
-        - test different sensor configurations (if possible)
-        - implement two sensor setup
-        - implement four sensor setup
-        - implement more complex sensor setup (if possible)
-
-*/
-
 LineFollower::LineFollower() {
     now = millis();
     motor_phase = 0;
-    
-    slow_speed_right = 140;
-    slow_speed_left = 140;
-    fast_speed_right = 200;
-    fast_speed_left = 200;
-    
+   
+    // slow speed used for turns
+    slow_speed_right = 130;
+    slow_speed_left = 130;
+    // max speed
+    fast_speed_right = 190;
+    fast_speed_left = 190;
+    // current speed
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
     
+    // target motor action
     target_left = 0.0;
     target_right = 0.0;
+    // current motor action
     curr_left = 0.0;
     curr_right = 0.0;
-
+    // smoothing parameter for calculating next notor action
     alpha = 0.8;
 
     white_th = 0;
-    black_th = 500;
+    black_th = 800;
     
-    last_throttle = 0.0;
     last_steer = 0.0;
 
+    // PID parameters
     Kp = 1.25;
-    Kd = 0.2;
+    Kd = 0.25;
 
     straighten = false;
 
@@ -106,23 +60,19 @@ void LineFollower::reset_vals() {
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
 
-    white_th = 0;
-    black_th = 800;
+    curr_left = 0.0;
+    curr_right = 0.0;
+    target_left = 0.0;
+    target_right = 0.0;
     
-    last_throttle = 0.0;
     last_steer = 0.0;
 
     straighten = false;
-
     new_input = false;
-    digital = false;
-
-    off_course = false;
-
-    sensor_input_count = 5;
-    last_sensor_input = new float[sensor_input_count] {0.0, 0.0, 0.0, 0.0, 0.0}; 
+    off_course = 0;
 }
 
+// set motor action target intesity, direction and max speed for forward drive
 void LineFollower::forward() {
     target_left = 1.0;
     target_right = 1.0;
@@ -131,6 +81,7 @@ void LineFollower::forward() {
     speed_right = fast_speed_right;
 }
 
+// set motor action target intesity, direction and max speed for backward drive
 void LineFollower::backward() {
     target_left = -1.0;
     target_right = -1.0;
@@ -139,6 +90,7 @@ void LineFollower::backward() {
     speed_right = fast_speed_right;
 }
 
+// set motor action target intesity, direction and max speed for backward left drive
 void LineFollower:: back_left() {
     target_left = -1.0;
     target_right = -1.0;
@@ -148,6 +100,7 @@ void LineFollower:: back_left() {
 
 }
 
+// set motor action target intesity, direction and max speed for backward right drive
 void LineFollower::back_right() {
     target_left = -1.0;
     target_right = -1.0;
@@ -157,9 +110,10 @@ void LineFollower::back_right() {
 
 }
 
-
+// calculate motor action target intesity, direction and max speed for steer actions
+// based on last_steer value
 void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
-
+    // right turns
     if (last_steer > 0.0) {
         left_cmd = 1.0;
         speed_left = fast_speed_left - 20;
@@ -167,6 +121,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
         right_cmd = 0.25 - last_steer;
     }
     
+    // left turns
     if (last_steer < 0.0) {
         right_cmd = 1.0;
         speed_right = fast_speed_right - 20;
@@ -175,7 +130,7 @@ void LineFollower::calculate_motor_cmd(float &left_cmd, float &right_cmd) {
     }
 }
 
-
+// STOP motor action 
 void LineFollower::stopMotors() {
   digitalWrite(IN1, LOW); 
   digitalWrite(IN2, LOW);
@@ -185,6 +140,7 @@ void LineFollower::stopMotors() {
   analogWrite(ENB, 0);
 }
 
+// update motor physics based on target and current motor commands
 void LineFollower::update_motor_physics() {
     // weighted average smoothing on spped fluctuations.
     curr_left = (target_left * alpha) + (curr_left * (1.0 - alpha));
@@ -197,23 +153,30 @@ void LineFollower::update_motor_physics() {
     apply_motor_action(left_pwm, right_pwm);
 }
 
+// apply provided left and right pwm to motors
 void LineFollower::apply_motor_action(int left_pwm, int right_pwm) {
 // --- Left Motor ---
     if (left_pwm > 0) {
+        // forward action
         digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
     } else if (left_pwm < 0) {
+        // backward action
         digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
     } else {
+        // stop
         digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
     }
     analogWrite(ENA, abs(left_pwm));
 
     // --- Right Motor ---
     if (right_pwm > 0) {
+        // forward action
         digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
     } else if (right_pwm < 0) {
+        // backward action
         digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
     } else {
+        // stop
         digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
     }
     analogWrite(ENB, abs(right_pwm));
@@ -267,9 +230,11 @@ void LineFollower::read_sensor_data() {
     new_input = true;
 }
 
+
 /*
 Calculate next steer action based on current sensor readings
 */
+/*
 void LineFollower::calculate_steer2(int id_left, int id_right) {
     if (!new_input) {
         return;
@@ -312,9 +277,11 @@ void LineFollower::calculate_steer2(int id_left, int id_right) {
         }
     }
 }
+*/
 /*
 Calculate steer from 3 IR sensor inputs
 */
+/*
 void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
     if (!new_input) {
         return;
@@ -389,13 +356,14 @@ void LineFollower::calculate_steer3(int id_left, int id_center, int id_right) {
         // Serial.println("off-course: all white");
         off_course += 1;
     }
-
 }
+*/
 
 void LineFollower::calculate_steer5() {
     if (!new_input) {
         return;
     }
+    
     if (is_crossroad()) {
         last_steer = 0.0;
         return;
@@ -413,6 +381,7 @@ void LineFollower::calculate_pid_steer() {
     float active_sensors = 0.0;
     float weights[5] = {-1.5, -1.0, 0.0, 1.0, 1.5};
 
+    // calculate weighted sum and count active sensors
     for (int i = 0; i < sensor_input_count; i++) {
         int black = (last_sensor_input[i] == I_BLACK) ? 1 : 0;
 
@@ -422,11 +391,13 @@ void LineFollower::calculate_pid_steer() {
         }
     }
 
+    // calculate current error based on weighted sum and active sensor count
     float curr_error = 0.0;
     if (active_sensors) {
         off_course = 0;
         curr_error = weighted_pos_sum / active_sensors;
     } else {
+        // set high current error when off track
         off_course++;
             if (last_steer > 0.0) {
                 curr_error = 1.5;
@@ -441,8 +412,10 @@ void LineFollower::calculate_pid_steer() {
     float D = curr_error - last_error;
     last_error = curr_error;
 
+    // calculate steer with pid
     last_steer = Kp * P + Kd * D;
 
+    // cut-off steer values
     if (last_steer > 1.0) {
         last_steer = 1.0;
     } else if (last_steer < -1.0) {
@@ -459,25 +432,18 @@ void LineFollower::control_motors() {
         return;
     }
 
-    last_throttle = abs(last_steer);
-
     // backtrack if off course for too long
-    if (off_course > 275) {
+    if (off_course > 250) {
         // stopMotors();
-        if (last_steer == 0.0) {
+        // if (last_steer == 0.0) {
             backward();
-
-        }
-
         if (last_steer > 0.0) {
-            back_left();
-        } else if (last_steer < 0.0) {
             back_right();
+        } else if (last_steer < 0.0) {
+            back_left();
         }
-        return;
     } else {
         if (last_steer == 0.0) {
-            last_throttle = 1.0;
             // go forward
             forward();
         } else {
@@ -530,9 +496,13 @@ bool LineFollower::is_crossroad() {
 Call all functions needed for following line
 */
 void LineFollower::follow_line() {
+    // get new sensor input
     read_sensor_data();
+    // calculate new steer based on sensor input
     calculate_steer5();
+    // calculate target motor actions and speeds (pwm)
     control_motors();
+    // calculate and send action to motors
     update_motor_physics();
 
     new_input = false;
