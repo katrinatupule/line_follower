@@ -7,11 +7,11 @@ LineFollower::LineFollower() {
     motor_phase = 0;
    
     // slow speed used for turns
-    slow_speed_right = 130;
-    slow_speed_left = 130;
+    slow_speed_right = 110;
+    slow_speed_left = 110;
     // max speed
-    fast_speed_right = 190;
-    fast_speed_left = 190;
+    fast_speed_right = 170;
+    fast_speed_left = 170;
     // current speed
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
@@ -26,13 +26,13 @@ LineFollower::LineFollower() {
     alpha = 0.8;
 
     white_th = 0;
-    black_th = 800;
+    black_th = 500;
     
     last_steer = 0.0;
 
     // PID parameters
     Kp = 1.25;
-    Kd = 0.25;
+    Kd = 0.2;
 
     straighten = false;
 
@@ -86,8 +86,8 @@ void LineFollower::backward() {
     target_left = -1.0;
     target_right = -1.0;
 
-    speed_left = fast_speed_left;
-    speed_right = fast_speed_right;
+    speed_left = slow_speed_left;
+    speed_right = slow_speed_right;
 }
 
 // set motor action target intesity, direction and max speed for backward left drive
@@ -95,7 +95,7 @@ void LineFollower:: back_left() {
     target_left = -1.0;
     target_right = -1.0;
 
-    speed_left = slow_speed_left;
+    speed_left = (int)(slow_speed_left*abs(last_steer));
     speed_right = slow_speed_right;
 
 }
@@ -106,7 +106,7 @@ void LineFollower::back_right() {
     target_right = -1.0;
 
     speed_left = slow_speed_left;
-    speed_right = slow_speed_right;
+    speed_right = (int)(slow_speed_right*abs(last_steer));
 
 }
 
@@ -433,7 +433,7 @@ void LineFollower::control_motors() {
     }
 
     // backtrack if off course for too long
-    if (off_course > 250) {
+    if (off_course > 200) {
         // stopMotors();
         // if (last_steer == 0.0) {
             backward();
