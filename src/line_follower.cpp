@@ -7,11 +7,11 @@ LineFollower::LineFollower() {
     motor_phase = 0;
    
     // slow speed used for turns
-    slow_speed_right = 110;
-    slow_speed_left = 110;
+    slow_speed_right = 40;
+    slow_speed_left = 40;
     // max speed
-    fast_speed_right = 170;
-    fast_speed_left = 170;
+    fast_speed_right = 100;
+    fast_speed_left = 100;
     // current speed
     speed_right = slow_speed_left;
     speed_left = slow_speed_right;
@@ -22,8 +22,8 @@ LineFollower::LineFollower() {
     // current motor action
     curr_left = 0.0;
     curr_right = 0.0;
-    // smoothing parameter for calculating next notor action
-    alpha = 0.8;
+    // smoothing parameter for calculating next motor action
+    alpha = 0.8235003;
 
     white_th = 0;
     black_th = 500;
@@ -31,8 +31,8 @@ LineFollower::LineFollower() {
     last_steer = 0.0;
 
     // PID parameters
-    Kp = 1.25;
-    Kd = 0.2;
+    Kp = 1.11413;
+    Kd = 0.45122;
 
     straighten = false;
 
