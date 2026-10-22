@@ -216,7 +216,7 @@ Update new_input flag
 */
 void LineFollower::read_sensor_data() {
     for (int i=0; i<sensor_input_count; i++) {
-        if (digital){
+        if (digital){///digital = false
             last_sensor_input[i] = digitalRead(sensor_pin_nrs[i]);
         } else {
             float val = analogRead(sensor_pin_nrs[i]);
